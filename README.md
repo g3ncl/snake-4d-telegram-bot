@@ -22,7 +22,7 @@ This repository contains the code for a Telegram bot that allows users to play t
 1. Clone this repository:
 
    ```
-   git clone https://github.com/yourusername/snake-4d-telegram-bot.git
+   git clone https://github.com/g3ncl/snake-4d-telegram-bot.git
    cd snake-4d-telegram-bot
    ```
 
