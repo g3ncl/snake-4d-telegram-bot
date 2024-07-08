@@ -1,6 +1,6 @@
 # Snake 4D Telegram Bot
 
-This repository contains the code for a Telegram bot that allows users to play the Snake 4D game directly within Telegram chats. The bot is built using Node.js and is designed to be deployed on AWS Lambda.
+This repository contains the code for [@snake4dbot](https://t.me/snake4dbot), a Telegram bot that allows users to play the Snake 4D game directly within Telegram chats. The bot is built using Node.js and is designed to be deployed on AWS Lambda.
 
 ## Features
 
