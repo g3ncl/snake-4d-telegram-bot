@@ -44,15 +44,15 @@ jobs:
             --function-name snake-4d-telegram-bot \
             --zip-file fileb://webhook.zip
           
+          aws lambda wait function-updated --function-name snake-4d-telegram-bot
+          
           aws lambda update-function-configuration \
             --function-name snake-4d-telegram-bot \
             --runtime provided.al2023 \
             --handler bootstrap \
-            --architectures "arm64" \
             --environment "Variables={TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }},GAME_URL=${{ secrets.GAME_URL }}}" \
             --memory-size 128 \
-            --timeout 30 \
-            --role ${{ secrets.LAMBDA_EXECUTION_ROLE }}
+            --timeout 30
 
       - name: Deploy Score Update Lambda (Go)
         run: |
@@ -60,12 +60,12 @@ jobs:
             --function-name snake-4d-score-update \
             --zip-file fileb://score-update.zip
           
+          aws lambda wait function-updated --function-name snake-4d-score-update
+          
           aws lambda update-function-configuration \
             --function-name snake-4d-score-update \
             --runtime provided.al2023 \
             --handler bootstrap \
-            --architectures "arm64" \
             --environment "Variables={TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}}" \
             --memory-size 128 \
-            --timeout 10 \
-            --role ${{ secrets.LAMBDA_EXECUTION_ROLE }}
+            --timeout 10
