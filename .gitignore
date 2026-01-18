@@ -13,9 +13,6 @@ bin/
 # Lambda deployment packages
 *.zip
 
-# Go
-go.sum
-
 # Environment files
 .env
 .env*.local
