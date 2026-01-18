@@ -109,7 +109,12 @@ func handleMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message) error {
 		return err
 
 	case "/game":
-		game := tgbotapi.NewGame(message.Chat.ID, gameShortName)
+		game := tgbotapi.GameConfig{
+			BaseChat: tgbotapi.BaseChat{
+				ChatID: message.Chat.ID,
+			},
+			GameShortName: gameShortName,
+		}
 		_, err := bot.Send(game)
 		return err
 	}
@@ -119,7 +124,11 @@ func handleMessage(bot *tgbotapi.BotAPI, message *tgbotapi.Message) error {
 
 // handleInlineQuery processes inline queries
 func handleInlineQuery(bot *tgbotapi.BotAPI, query *tgbotapi.InlineQuery) error {
-	result := tgbotapi.NewInlineQueryResultGame(gameShortName, gameShortName)
+	result := tgbotapi.InlineQueryResultGame{
+		Type: "game",
+		ID:   gameShortName,
+		GameShortName: gameShortName,
+	}
 	config := tgbotapi.InlineConfig{
 		InlineQueryID: query.ID,
 		Results:       []interface{}{result},
