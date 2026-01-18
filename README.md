@@ -1,6 +1,6 @@
 # Snake 4D Telegram Bot
 
-This repository contains the code for [@snake4dbot](https://t.me/snake4dbot), a Telegram bot that allows users to play the Snake 4D game directly within Telegram chats. The bot is built using Node.js and is designed to be deployed on AWS Lambda.
+This repository contains the code for [@snake4dbot](https://t.me/snake4dbot), a Telegram bot that allows users to play the Snake 4D game directly within Telegram chats. The bot is built using Go and is designed to be deployed on AWS Lambda.
 
 ## Features
 
@@ -9,69 +9,111 @@ This repository contains the code for [@snake4dbot](https://t.me/snake4dbot), a 
 - Supports inline queries to start the game in any chat
 - Integrates with the Snake 4D game hosted at https://snake4d.netlify.app
 - Utilizes Telegram's Game API to set and display highscores within chats
+- Provides a dedicated score update endpoint for the game frontend
+
+## Architecture
+
+This repository deploys **two separate Lambda functions**, both written in Go:
+
+1. **`snake-4d-telegram-bot`** (Webhook Handler): Handles Telegram webhook events (commands, inline queries, callback queries)
+2. **`snake-4d-score-update`** (Score Update API): Handles score update requests from the game frontend via a Function URL
 
 ## Prerequisites
 
-- Node.js (v20 or later)
-- npm (Node Package Manager)
+- Go (v1.21 or later)
 - AWS account with Lambda and IAM access
 - Telegram Bot Token
 
 ## Setup
 
 1. Clone this repository:
-
-   ```
+   ```bash
    git clone https://github.com/g3ncl/snake-4d-telegram-bot.git
    cd snake-4d-telegram-bot
    ```
 
-2. Install dependencies:
-
-   ```
-   npm install
+2. Install Go dependencies:
+   ```bash
+   go mod download
    ```
 
 3. Create a `.env` file in the root directory and add your Telegram Bot Token:
+   ```
+   TELEGRAM_BOT_TOKEN=your_bot_token
+   ```
 
-   ```
-   TELEGRAM_BOT_TOKEN= your_bot_token
-   ```
-
-4. Build the TypeScript code:
-   ```
-   npm run build
+4. Build the Go Lambda functions:
+   ```bash
+   mkdir -p bin/webhook bin/score-update
+   GOOS=linux GOARCH=arm64 go build -o bin/webhook/bootstrap cmd/webhook/main.go
+   GOOS=linux GOARCH=arm64 go build -o bin/score-update/bootstrap cmd/score-update/main.go
+   cd bin/webhook && zip ../../webhook.zip bootstrap && cd ../..
+   cd bin/score-update && zip ../../score-update.zip bootstrap && cd ../..
    ```
 
 ## Deployment
 
-This bot is configured to be automatically deployed to AWS Lambda using GitHub Actions. The workflow is triggered on every push to the `main` branch.
+This bot is configured to be automatically deployed to AWS Lambda using GitHub Actions. The workflow is triggered on every push to the `main` branch and deploys both Lambda functions.
 
-To enable the automatic deployment, you need to set up the following secrets in your GitHub repository:
+### Authentication
 
-- `AWS_ACCESS_KEY_ID`: Your AWS access key ID
-- `AWS_SECRET_ACCESS_KEY`: Your AWS secret access key
-- `AWS_REGION`: The AWS region where your Lambda function is located
+The workflow uses **OIDC (OpenID Connect)** to authenticate with AWS, eliminating the need for long-lived access keys. It assumes the existing `GitHubActionsDeployRole` IAM role.
+
+### Required GitHub Secrets
+
+Set up the following secrets in your GitHub repository (Settings → Secrets and variables → Actions):
+
+- `AWS_REGION`: The AWS region where your Lambda functions are located (e.g., `eu-south-1`)
 - `TELEGRAM_BOT_TOKEN`: Your Telegram Bot Token
+- `GAME_URL`: The URL where the Snake 4D game is hosted (e.g., `https://snake4d.netlify.app`)
 - `LAMBDA_EXECUTION_ROLE`: The ARN of the IAM role for Lambda execution
+
+### Function URL Setup (First-Time Only)
+
+After the first deployment of the `snake-4d-score-update` Lambda function, you need to create a Function URL:
+
+1. Navigate to the AWS Lambda console
+2. Select the `snake-4d-score-update` function
+3. Go to **Configuration** → **Function URL**
+4. Click **Create function URL**
+   - **Auth type**: `NONE` (public access)
+   - **Configure cross-origin resource sharing (CORS)**: Optional (handler includes CORS headers)
+5. Copy the generated Function URL (e.g., `https://abc123.lambda-url.eu-south-1.on.aws/`)
+6. Add this URL to your frontend's GitHub secrets as `NEXT_PUBLIC_SCORE_API_URL`
 
 ### Manual Deployment
 
-If you prefer to deploy manually or need to set up the Lambda function for the first time:
+If you prefer to deploy manually or need to set up the Lambda functions for the first time:
 
-1. Zip the contents of the `dist` folder and `node_modules`:
+**Build both Lambda functions:**
 
-   ```
-   zip -r function.zip dist node_modules
-   ```
+```bash
+mkdir -p bin/webhook bin/score-update
+GOOS=linux GOARCH=arm64 go build -o bin/webhook/bootstrap cmd/webhook/main.go
+GOOS=linux GOARCH=arm64 go build -o bin/score-update/bootstrap cmd/score-update/main.go
+cd bin/webhook && zip ../../webhook.zip bootstrap && cd ../..
+cd bin/score-update && zip ../../score-update.zip bootstrap && cd ../..
+```
 
-2. Use the AWS CLI or AWS Management Console to create or update your Lambda function with the `function.zip` file.
+**Deploy the webhook handler:**
 
-3. Set the environment variable `TELEGRAM_BOT_TOKEN` in your Lambda function configuration.
+Use the AWS CLI or AWS Management Console to create or update the `snake-4d-telegram-bot` Lambda function:
+- Upload `webhook.zip`
+- Set runtime to `provided.al2023` with `arm64` architecture
+- Set handler to `bootstrap`
+- Set environment variables:
+  - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
+  - `GAME_URL`: The URL where the Snake 4D game is hosted (e.g., `https://snake4d.netlify.app`)
+- Set up an API Gateway trigger and configure the Telegram webhook URL
 
-4. Configure the Lambda function handler as `dist/index.webhook`.
+**Deploy the score update handler:**
 
-5. Set up an API Gateway trigger for your Lambda function and configure the Telegram webhook to point to the API Gateway URL.
+Use the AWS CLI or AWS Management Console to create or update the `snake-4d-score-update` Lambda function:
+   - Upload `score-update.zip`
+   - Set runtime to `provided.al2023` with `arm64` architecture
+   - Set handler to `bootstrap`
+   - Set environment variable `TELEGRAM_BOT_TOKEN`
+   - Create a Function URL (see "Function URL Setup" above)
 
 ## Usage
 

@@ -1,29 +1,32 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Logs
+logs
+*.log
+npm-debug.log*
 
-# dependencies
-/node_modules
+# Coverage directory
+coverage
 
-# production
-/dist
+# Build output
+dist/
+bin/
 
-# misc
+# Lambda deployment packages
+*.zip
+
+# Go
+go.sum
+
+# Environment files
+.env
+.env*.local
+
+# OS files
 .DS_Store
 *.pem
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
-.env*.local
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-.env
-env.d.ts
-
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

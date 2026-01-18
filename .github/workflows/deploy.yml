@@ -3,46 +3,69 @@ name: Deploy to AWS Lambda
 on:
   push:
     branches:
-      - main # or your default branch name
+      - main
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # Required for OIDC
+      contents: read    # Required for actions/checkout
     steps:
       - uses: actions/checkout@v3
 
-      - name: Use Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Go
+        uses: actions/setup-go@v4
         with:
-          node-version: "20"
+          go-version: '1.21'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Download Go dependencies
+        run: go mod download
 
-      - name: Build TypeScript
-        run: npm run build
+      - name: Build Go Lambdas
+        run: |
+          mkdir -p bin/webhook bin/score-update
+          GOOS=linux GOARCH=arm64 go build -o bin/webhook/bootstrap cmd/webhook/main.go
+          GOOS=linux GOARCH=arm64 go build -o bin/score-update/bootstrap cmd/score-update/main.go
+          cd bin/webhook && zip -q ../../webhook.zip bootstrap && cd ../..
+          cd bin/score-update && zip -q ../../score-update.zip bootstrap && cd ../..
+          echo "Build complete: webhook.zip, score-update.zip"
 
-      - name: Zip Lambda Function
-        run: zip -r function.zip dist node_modules
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::942448537231:role/GitHubActionsDeployRole
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Deploy to Lambda
-        uses: appleboy/lambda-action@v0.1.9
-        with:
-          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws_region: ${{ secrets.AWS_REGION }}
-          function_name: snake-4d-telegram-bot
-          zip_file: function.zip
-          handler: dist/index.webhook
-          runtime: nodejs20.x
-          environment: TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
-          memory_size: 128
-          timeout: 30
-          role: ${{ secrets.LAMBDA_EXECUTION_ROLE }}
+      - name: Deploy Webhook Lambda (Go)
+        run: |
+          aws lambda update-function-code \
+            --function-name snake-4d-telegram-bot \
+            --zip-file fileb://webhook.zip
+          
+          aws lambda update-function-configuration \
+            --function-name snake-4d-telegram-bot \
+            --runtime provided.al2023 \
+            --handler bootstrap \
+            --architectures arm64 \
+            --environment "Variables={TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }},GAME_URL=${{ secrets.GAME_URL }}}" \
+            --memory-size 128 \
+            --timeout 30 \
+            --role ${{ secrets.LAMBDA_EXECUTION_ROLE }}
+
+      - name: Deploy Score Update Lambda (Go)
+        run: |
+          aws lambda update-function-code \
+            --function-name snake-4d-score-update \
+            --zip-file fileb://score-update.zip
+          
+          aws lambda update-function-configuration \
+            --function-name snake-4d-score-update \
+            --runtime provided.al2023 \
+            --handler bootstrap \
+            --architectures arm64 \
+            --environment "Variables={TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}}" \
+            --memory-size 128 \
+            --timeout 10 \
+            --role ${{ secrets.LAMBDA_EXECUTION_ROLE }}
