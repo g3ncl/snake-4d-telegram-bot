@@ -48,7 +48,7 @@ jobs:
             --function-name snake-4d-telegram-bot \
             --runtime provided.al2023 \
             --handler bootstrap \
-            --architectures arm64 \
+            --architectures "arm64" \
             --environment "Variables={TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }},GAME_URL=${{ secrets.GAME_URL }}}" \
             --memory-size 128 \
             --timeout 30 \
@@ -64,7 +64,7 @@ jobs:
             --function-name snake-4d-score-update \
             --runtime provided.al2023 \
             --handler bootstrap \
-            --architectures arm64 \
+            --architectures "arm64" \
             --environment "Variables={TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}}" \
             --memory-size 128 \
             --timeout 10 \
