@@ -41,8 +41,8 @@ type SuccessResponse struct {
 }
 
 // Handler is the Lambda function handler
-func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	log.Printf("Received request. Body length: %d", len(request.Body))
+func Handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error) {
+	log.Printf("Received request. Method: %s. Body length: %d", request.RequestContext.HTTP.Method, len(request.Body))
 
 	// CORS headers for all responses
 	headers := map[string]string{
@@ -53,7 +53,7 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 
 	// Handle preflight OPTIONS request
-	if request.HTTPMethod == "OPTIONS" {
+	if request.RequestContext.HTTP.Method == "OPTIONS" {
 		return events.APIGatewayProxyResponse{
 			StatusCode: 200,
 			Headers:    headers,
