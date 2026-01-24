@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -26,7 +27,7 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 
 	// Get Telegram bot token from environment
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	botToken := strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN"))
 	if botToken == "" {
 		log.Println("TELEGRAM_BOT_TOKEN is not set")
 		return events.APIGatewayProxyResponse{
@@ -142,7 +143,7 @@ func handleInlineQuery(bot *tgbotapi.BotAPI, query *tgbotapi.InlineQuery) error 
 func handleCallbackQuery(bot *tgbotapi.BotAPI, query *tgbotapi.CallbackQuery, gameURL string) error {
 	// Build game URL with user ID and message ID
 	url := fmt.Sprintf(
-		"%s/#userId=%d&messageId=%s",
+		"%s#userId=%d&messageId=%s",
 		gameURL,
 		query.From.ID,
 		query.InlineMessageID,

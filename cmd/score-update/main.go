@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -39,6 +42,8 @@ type SuccessResponse struct {
 
 // Handler is the Lambda function handler
 func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	log.Printf("Received request. Body length: %d", len(request.Body))
+
 	// CORS headers for all responses
 	headers := map[string]string{
 		"Access-Control-Allow-Origin":  "*",
@@ -56,26 +61,32 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 
 	// Get Telegram bot token from environment
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	botToken := strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN"))
 	if botToken == "" {
+		log.Println("Error: TELEGRAM_BOT_TOKEN is not set")
 		return errorResponse(headers, 500, "Server configuration error")
 	}
 
 	// Parse request body
 	var scoreReq ScoreRequest
 	if err := json.Unmarshal([]byte(request.Body), &scoreReq); err != nil {
+		log.Printf("Error decoding body: %v. Body header: %q", err, string(request.Body))
 		return errorResponse(headers, 400, "Invalid request body")
 	}
 
 	// Validate required fields
 	if scoreReq.UserID == "" || scoreReq.Score == 0 || scoreReq.MessageID == "" {
+		log.Printf("Missing fields: UserID=%q, Score=%d, MessageID=%q", scoreReq.UserID, scoreReq.Score, scoreReq.MessageID)
 		return errorResponse(headers, 400, "Missing required fields")
 	}
 
 	// Call Telegram API to update score
 	if err := updateTelegramScore(botToken, scoreReq); err != nil {
+		log.Printf("Error updating score: %v", err)
 		return errorResponse(headers, 500, fmt.Sprintf("Failed to update score: %v", err))
 	}
+
+	log.Printf("Successfully updated score for UserID=%s", scoreReq.UserID)
 
 	// Return success response
 	successBody, _ := json.Marshal(SuccessResponse{Success: true})
@@ -108,7 +119,8 @@ func updateTelegramScore(botToken string, scoreReq ScoreRequest) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("telegram API returned status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	return nil
