@@ -73,6 +73,8 @@ func Handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (event
 		log.Printf("Error decoding body: %v. Body header: %q", err, string(request.Body))
 		return errorResponse(headers, 400, "Invalid request body")
 	}
+	
+	log.Printf("Parsed request: UserID=%q, Score=%d, MessageID=%q", scoreReq.UserID, scoreReq.Score, scoreReq.MessageID)
 
 	// Validate required fields
 	if scoreReq.UserID == "" || scoreReq.Score == 0 || scoreReq.MessageID == "" {

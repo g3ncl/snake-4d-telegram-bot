@@ -141,13 +141,14 @@ func handleInlineQuery(bot *tgbotapi.BotAPI, query *tgbotapi.InlineQuery) error 
 
 // handleCallbackQuery processes callback queries (game start)
 func handleCallbackQuery(bot *tgbotapi.BotAPI, query *tgbotapi.CallbackQuery, gameURL string) error {
-	// Build game URL with user ID and message ID
 	url := fmt.Sprintf(
 		"%s#userId=%d&messageId=%s",
 		gameURL,
 		query.From.ID,
 		query.InlineMessageID,
 	)
+
+	log.Printf("Generated game URL: %s (InlineMessageID: %q)", url, query.InlineMessageID)
 
 	config := tgbotapi.NewCallbackWithAlert(query.ID, "")
 	config.URL = url
