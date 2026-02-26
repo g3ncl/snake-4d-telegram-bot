@@ -9,24 +9,36 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 )
 
-// ScoreRequest represents the incoming request payload
+// ScoreRequest represents the incoming request payload.
+// Either InlineMessageID or (ChatID + MessageID) must be provided.
 type ScoreRequest struct {
-	UserID    string `json:"userId"`
-	Score     int    `json:"score"`
-	MessageID string `json:"messageId"`
+	UserID          string `json:"userId"`
+	Score           int    `json:"score"`
+	InlineMessageID string `json:"inlineMessageId,omitempty"`
+	ChatID          string `json:"chatId,omitempty"`
+	MessageID       string `json:"messageId,omitempty"`
 }
 
-// TelegramRequest represents the payload sent to Telegram API
-type TelegramRequest struct {
+// InlineTelegramRequest is the payload for inline mode setGameScore
+type InlineTelegramRequest struct {
 	InlineMessageID string `json:"inline_message_id"`
-	UserID          string `json:"user_id"`
+	UserID          int64  `json:"user_id"`
 	Score           int    `json:"score"`
+}
+
+// DirectTelegramRequest is the payload for direct mode setGameScore
+type DirectTelegramRequest struct {
+	ChatID    int64 `json:"chat_id"`
+	MessageID int   `json:"message_id"`
+	UserID    int64 `json:"user_id"`
+	Score     int   `json:"score"`
 }
 
 // ErrorResponse represents an error response
@@ -73,13 +85,22 @@ func Handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (event
 		log.Printf("Error decoding body: %v. Body header: %q", err, string(request.Body))
 		return errorResponse(headers, 400, "Invalid request body")
 	}
-	
-	log.Printf("Parsed request: UserID=%q, Score=%d, MessageID=%q", scoreReq.UserID, scoreReq.Score, scoreReq.MessageID)
+
+	log.Printf("Parsed request: UserID=%q, Score=%d, InlineMessageID=%q, ChatID=%q, MessageID=%q",
+		scoreReq.UserID, scoreReq.Score, scoreReq.InlineMessageID, scoreReq.ChatID, scoreReq.MessageID)
 
 	// Validate required fields
-	if scoreReq.UserID == "" || scoreReq.Score == 0 || scoreReq.MessageID == "" {
-		log.Printf("Missing fields: UserID=%q, Score=%d, MessageID=%q", scoreReq.UserID, scoreReq.Score, scoreReq.MessageID)
+	if scoreReq.UserID == "" || scoreReq.Score == 0 {
+		log.Printf("Missing fields: UserID=%q, Score=%d", scoreReq.UserID, scoreReq.Score)
 		return errorResponse(headers, 400, "Missing required fields")
+	}
+
+	// Validate that either inline or direct mode params are provided
+	hasInline := scoreReq.InlineMessageID != ""
+	hasDirect := scoreReq.ChatID != "" && scoreReq.MessageID != ""
+	if !hasInline && !hasDirect {
+		log.Printf("Missing message identification: need either inlineMessageId or chatId+messageId")
+		return errorResponse(headers, 400, "Missing message identification fields")
 	}
 
 	// Call Telegram API to update score
@@ -103,16 +124,45 @@ func Handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (event
 func updateTelegramScore(botToken string, scoreReq ScoreRequest) error {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/setGameScore", botToken)
 
-	telegramReq := TelegramRequest{
-		InlineMessageID: scoreReq.MessageID,
-		UserID:          scoreReq.UserID,
-		Score:           scoreReq.Score,
+	userID, err := strconv.ParseInt(scoreReq.UserID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid user ID %q: %w", scoreReq.UserID, err)
 	}
 
-	jsonData, err := json.Marshal(telegramReq)
+	var jsonData []byte
+
+	if scoreReq.InlineMessageID != "" {
+		// Inline mode
+		telegramReq := InlineTelegramRequest{
+			InlineMessageID: scoreReq.InlineMessageID,
+			UserID:          userID,
+			Score:           scoreReq.Score,
+		}
+		jsonData, err = json.Marshal(telegramReq)
+	} else {
+		// Direct mode
+		chatID, chatErr := strconv.ParseInt(scoreReq.ChatID, 10, 64)
+		if chatErr != nil {
+			return fmt.Errorf("invalid chat ID %q: %w", scoreReq.ChatID, chatErr)
+		}
+		messageID, msgErr := strconv.Atoi(scoreReq.MessageID)
+		if msgErr != nil {
+			return fmt.Errorf("invalid message ID %q: %w", scoreReq.MessageID, msgErr)
+		}
+		telegramReq := DirectTelegramRequest{
+			ChatID:    chatID,
+			MessageID: messageID,
+			UserID:    userID,
+			Score:     scoreReq.Score,
+		}
+		jsonData, err = json.Marshal(telegramReq)
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to marshal telegram request: %w", err)
 	}
+
+	log.Printf("Sending to Telegram API: %s", string(jsonData))
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {

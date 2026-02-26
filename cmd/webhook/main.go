@@ -141,14 +141,30 @@ func handleInlineQuery(bot *tgbotapi.BotAPI, query *tgbotapi.InlineQuery) error 
 
 // handleCallbackQuery processes callback queries (game start)
 func handleCallbackQuery(bot *tgbotapi.BotAPI, query *tgbotapi.CallbackQuery, gameURL string) error {
-	url := fmt.Sprintf(
-		"%s#userId=%d&messageId=%s",
-		gameURL,
-		query.From.ID,
-		query.InlineMessageID,
-	)
+	var url string
 
-	log.Printf("Generated game URL: %s (InlineMessageID: %q)", url, query.InlineMessageID)
+	if query.InlineMessageID != "" {
+		// Inline mode: game was sent via @snake4dbot in a chat
+		url = fmt.Sprintf(
+			"%s#userId=%d&inlineMessageId=%s",
+			gameURL,
+			query.From.ID,
+			query.InlineMessageID,
+		)
+		log.Printf("Generated game URL (inline): %s", url)
+	} else if query.Message != nil {
+		// Direct mode: game was sent via /game command
+		url = fmt.Sprintf(
+			"%s#userId=%d&chatId=%d&messageId=%d",
+			gameURL,
+			query.From.ID,
+			query.Message.Chat.ID,
+			query.Message.MessageID,
+		)
+		log.Printf("Generated game URL (direct): %s", url)
+	} else {
+		return fmt.Errorf("callback query has neither InlineMessageID nor Message")
+	}
 
 	config := tgbotapi.NewCallbackWithAlert(query.ID, "")
 	config.URL = url
